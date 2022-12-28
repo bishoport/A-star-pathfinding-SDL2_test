@@ -6,9 +6,9 @@ using namespace std;
 Grid::Grid() {
 	stringstream ss(mazeFile, ios::in);
 
-	for (int column = 0; column < SIZE; column++)
+	for (int column = 0; column < SIZE_Y; column++)
 	{
-		for (int row = 0; row < SIZE; row++)
+		for (int row = 0; row < SIZE_X; row++)
 		{
 			char buffer;
 			Node* n = new Node();
@@ -18,6 +18,19 @@ Grid::Grid() {
 			{
 				n->isWay = true;
 			}
+			else if (buffer == 'e')
+			{
+				n->isWay = true;
+				startEnemiesNodes.push_back(n);
+			}
+			else if (buffer == 'p')
+			{
+				n->isWay = true;
+				startPlayerNode = n;
+			}
+
+
+
 
 
 			n->fCost = FLT_MAX;
@@ -28,6 +41,12 @@ Grid::Grid() {
 			n->x = row;
 			n->y = column;
 
+			n->isActive = false;
+			n->isPlayerNode = false;
+			n->isEnemyNode = false;
+			n->enemyInNode = nullptr;
+
+
 			maze[column][row] = n;
 
 			//Center node in scene
@@ -37,9 +56,9 @@ Grid::Grid() {
 	}
 
 	//Set fourNeighbors
-	for (int i = 0; i < SIZE; i++)
+	for (int i = 0; i < SIZE_Y; i++)
 	{
-		for (int j = 0; j < SIZE; j++)
+		for (int j = 0; j < SIZE_X; j++)
 		{
 			maze[i][j]->fourNeighbors = GetFourNeighbors(i, j);
 			maze[i][j]->eightNeighbors = GetEightNeighbors(i, j);
@@ -63,9 +82,9 @@ vector< Grid::Node*> Grid::GetFourNeighbors(int x, int y)
 	checkX = x + step;
 	checkY = y;
 
-	if (checkX >= 0 && checkX < Grid::SIZE)
+	if (checkX >= 0 && checkX < Grid::SIZE_Y)
 	{
-		if (checkY >= 0 && checkY < Grid::SIZE)
+		if (checkY >= 0 && checkY < Grid::SIZE_X)
 		{
 			temp_neighbors.push_back((maze[checkX][checkY]));
 		}
@@ -75,9 +94,9 @@ vector< Grid::Node*> Grid::GetFourNeighbors(int x, int y)
 	checkX = x - step;
 	checkY = y;
 
-	if (checkX >= 0 && checkX < Grid::SIZE)
+	if (checkX >= 0 && checkX < Grid::SIZE_Y)
 	{
-		if (checkY >= 0 && checkY < Grid::SIZE)
+		if (checkY >= 0 && checkY < Grid::SIZE_X)
 		{
 			temp_neighbors.push_back((maze[checkX][checkY]));
 		}
@@ -87,9 +106,9 @@ vector< Grid::Node*> Grid::GetFourNeighbors(int x, int y)
 	checkX = x;
 	checkY = y + step;
 
-	if (checkX >= 0 && checkX < Grid::SIZE)
+	if (checkX >= 0 && checkX < Grid::SIZE_Y)
 	{
-		if (checkY >= 0 && checkY < Grid::SIZE)
+		if (checkY >= 0 && checkY < Grid::SIZE_X)
 		{
 			temp_neighbors.push_back((maze[checkX][checkY]));
 		}
@@ -99,9 +118,9 @@ vector< Grid::Node*> Grid::GetFourNeighbors(int x, int y)
 	checkX = x;
 	checkY = y - step;
 
-	if (checkX >= 0 && checkX < Grid::SIZE)
+	if (checkX >= 0 && checkX < Grid::SIZE_Y)
 	{
-		if (checkY >= 0 && checkY < Grid::SIZE)
+		if (checkY >= 0 && checkY < Grid::SIZE_X)
 		{
 			temp_neighbors.push_back((maze[checkX][checkY]));
 		}
@@ -124,7 +143,7 @@ vector< Grid::Node*> Grid::GetEightNeighbors(int posX, int posY)
 			int checkX = (maze[posX][posY])->x + x;
 			int checkY = (maze[posX][posY])->y + y;
 
-			if (checkX >= 0 && checkX < SIZE && checkY >= 0 && checkY < SIZE)
+			if (checkX >= 0 && checkX < SIZE_Y && checkY >= 0 && checkY < SIZE_Y)
 			{
 				temp_neighbors.push_back((maze[checkX][checkY]));
 			}
@@ -132,7 +151,6 @@ vector< Grid::Node*> Grid::GetEightNeighbors(int posX, int posY)
 	}
 	return temp_neighbors;
 }
-
 
 vector< Grid::Node*> Grid::GetMaxWalk(int x, int y)
 {
@@ -159,10 +177,6 @@ vector< Grid::Node*> Grid::GetMaxWalk(int x, int y)
 	return temp_neighbors;
 	//cout << node.fourNeighbors.size() << endl;
 }
-
-
-
-
 Grid::Node* Grid::getNodeByCoordinates(int x, int y)
 {
 	return (maze[x][y]);
@@ -173,7 +187,7 @@ Grid::Node* Grid::getNodeByCoordinates(int x, int y)
 
 void Grid::activeNode(int x, int y)
 {
-	if (x > SIZE - 1 || x < 0 || y > SIZE - 1 || y < 0)
+	if (x > SIZE_Y - 1 || x < 0 || y > SIZE_Y - 1 || y < 0)
 	{
 		cout << "x o y están fuera de limites" << endl;
 	}
@@ -183,13 +197,36 @@ void Grid::activeNode(int x, int y)
 	}
 }
 
+void Grid::unActiveNode(int x, int y)
+{
+	if (x > SIZE_Y - 1 || x < 0 || y > SIZE_Y - 1 || y < 0)
+	{
+		cout << "x o y están fuera de limites" << endl;
+	}
+	else
+	{
+		maze[x][y]->isActive = false;
+	}
+}
+
+void Grid::unActiveAllNodes()
+{
+	for (int i = 0; i < SIZE_Y; i++)
+	{
+		for (int j = 0; j < SIZE_X; j++)
+		{
+			maze[i][j]->isActive = false;
+		}
+	}
+}
+
 
 
 void Grid::displayMaze()
 {
-	for (int i = 0; i < SIZE; i++)
+	for (int i = 0; i < SIZE_Y; i++)
 	{
-		for (int j = 0; j < SIZE; j++)
+		for (int j = 0; j < SIZE_X; j++)
 		{
 			SDL_Rect rectNode = { j * SIZE_NODE,i * SIZE_NODE , SIZE_NODE , SIZE_NODE };
 

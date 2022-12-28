@@ -4,6 +4,8 @@
 #include "initclose.h"
 #include "renderer.h"
 
+#include "Timer.h"
+#include "TimerPause.h"
 
 
 #include "Grid.h"
@@ -26,41 +28,55 @@ typedef struct gameT
 	Vector2 mousePoint;
 	Vector2 mapScroll2Dpos;
 	int mapScrolllSpeed;
-	//isoEngineT isoEngine;
 	int lastTileClicked;
 }gameT;
 
 gameT game;
-
 Grid grid;
-
-PlayerCharacter player;
-EnemyCharacter enemy;
-
 ReferencesManager* ReferencesManager::_instance;
+
+int currentTurn = 0;
+Timer* gloabalTimer;
+TimerPause* turnManager;
+EnemyCharacter* enemyTurn;
+bool playerTurn = true;
 
 void init()
 {
+	//vector<EnemyCharacter> enemigos;
 
 	grid = Grid();
-	
+
 	game.loopDone = 0;
 	SDL_PumpEvents();  // make sure we have the latest mouse state
 
+	//Player
+	PlayerCharacter* player;
+	player = new PlayerCharacter( "assets/sprites/player.png",grid);
+	player->SetGridPosition({grid.startPlayerNode->y,grid.startPlayerNode->x});
+	player->transform.scale.x = Grid::SIZE_NODE;
+	player->transform.scale.y = Grid::SIZE_NODE;
+	ReferencesManager::getInstance()->setPlayerCharacter(player);
 
-	////Player
-	player = PlayerCharacter( "assets/sprites/player.png",grid);
-	player.SetGridPosition({3,5});
-	player.transform.scale.x = 50;
-	player.transform.scale.y = 50;
-	ReferencesManager::getInstance()->setPlayerCharacter(&player);
 
-	//////Enemy
-	enemy =  EnemyCharacter("assets/sprites/Alien.png", grid);
-	enemy.SetGridPosition({ 6,2 });
-	enemy.transform.scale.x = 50;
-	enemy.transform.scale.y = 50;
+	//Enemies
+	for (int i = 0; i < grid.startEnemiesNodes.size(); i++)
+	{
+		EnemyCharacter* enemy;
+		enemy = new EnemyCharacter("assets/sprites/Alien.png", "assets/sprites/Alien_damage.png", grid);
+		enemy->SetGridPosition({ grid.startEnemiesNodes[i]->y,grid.startEnemiesNodes[i]->x});
+		enemy->transform.scale.x = Grid::SIZE_NODE;
+		enemy->transform.scale.y = Grid::SIZE_NODE;
+		ReferencesManager::getInstance()->enemies.push_back(enemy);
+	}
+
+	//TIMERS CONTROLLERS
+	gloabalTimer = new Timer();
+	turnManager = new TimerPause();
 }
+
+
+
 
 
 void draw()
@@ -71,11 +87,23 @@ void draw()
 	//DRAW STUFFS
 	grid.displayMaze();
 
-	player.displayCharacter();
-	enemy.displayCharacter();
+	ReferencesManager::getInstance()->getPlayerCharacter()->draw();
 
-	grid.maze[player.currentGridPosition.x][player.currentGridPosition.y]->isPlayerNode = true;
-	grid.maze[enemy.currentGridPosition.x][enemy.currentGridPosition.y]->isEnemyNode = true;
+	grid.maze[ReferencesManager::getInstance()->getPlayerCharacter()->currentGridPosition.x][ReferencesManager::getInstance()->getPlayerCharacter()->currentGridPosition.y]->isPlayerNode = true;
+
+	for (int i = 0; i < ReferencesManager::getInstance()->enemies.size(); i++)
+	{
+		if (dynamic_cast<EnemyCharacter*>(ReferencesManager::getInstance()->enemies[i]))
+		{
+			EnemyCharacter* enemy = dynamic_cast<EnemyCharacter*>(ReferencesManager::getInstance()->enemies[i]);
+
+			if (enemy->isDead == false)
+			{
+				ReferencesManager::getInstance()->enemies[i]->draw();
+				grid.maze[enemy->currentGridPosition.x][enemy->currentGridPosition.y]->isEnemyNode = true;
+			}
+		}
+	}
 
 	SDL_RenderPresent(getRenderer());
 	//Don't be a CPU HOG!! :D
@@ -85,9 +113,74 @@ void draw()
 void update()
 {
 	SDL_GetMouseState(&game.mouseRect.x, &game.mouseRect.y);
+	
+	//TIME UPDATE
+	turnManager->update(gloabalTimer->GetDeltaTime());
+
+	//PLAYER UPDATE
+	ReferencesManager::getInstance()->getPlayerCharacter()->update(gloabalTimer->GetDeltaTime());
+
+	//ENEMIES UPDATE
+	for (int i = 0; i < ReferencesManager::getInstance()->enemies.size(); i++)
+	{
+		if (dynamic_cast<EnemyCharacter*>(ReferencesManager::getInstance()->enemies[i]))
+		{
+			EnemyCharacter* enemy = dynamic_cast<EnemyCharacter*>(ReferencesManager::getInstance()->enemies[i]);
+			if (enemy->isDead == false)
+			{
+				enemy->update(gloabalTimer->GetDeltaTime());
+			}
+		}
+	}
 }
 
 
+
+void moveAllEnemies()
+{
+	//for (int i = 0; i < ReferencesManager::getInstance()->enemies.size(); i++)
+	//{
+	//	if (dynamic_cast<EnemyCharacter*>(ReferencesManager::getInstance()->enemies[i]))
+	//	{
+	//		EnemyCharacter* enemy = dynamic_cast<EnemyCharacter*>(ReferencesManager::getInstance()->enemies[i]);
+
+	//		if (enemy->isDead == false)
+	//		{
+	//			enemy->Move();
+	//		}
+	//	}
+	//}
+
+	
+
+	if (dynamic_cast<EnemyCharacter*>(ReferencesManager::getInstance()->enemies[currentTurn]))
+	{
+		EnemyCharacter* enemy = dynamic_cast<EnemyCharacter*>(ReferencesManager::getInstance()->enemies[currentTurn]);
+
+		if (enemy->isDead == false)
+		{
+			enemyTurn = enemy;
+
+			turnManager->StartPause([]() {
+
+				cout << "VOLVEMOS DE LA PAUSA" << endl;
+
+				enemyTurn->Move();
+
+				if (currentTurn == ReferencesManager::getInstance()->enemies.size()-1)
+				{
+					playerTurn = true;
+					currentTurn = 0;
+				}
+				else
+				{
+					moveAllEnemies(); //<-Recursive call
+					currentTurn += 1;
+				}
+			});
+		}
+	}
+}
 
 
 
@@ -106,23 +199,39 @@ void updateInput()
 		case SDL_KEYDOWN:
 			switch (game.event.key.keysym.sym) {
 			case SDLK_a:
-				player.Move("-Y");
-				enemy.Move();
+				if (playerTurn)
+				{
+					playerTurn = false;
+					ReferencesManager::getInstance()->getPlayerCharacter()->Move("-Y");
+					moveAllEnemies();
+				}
 				break;
 
 			case SDLK_d:
-				player.Move("+Y");
-				enemy.Move();
+				if (playerTurn)
+				{
+					playerTurn = false;
+					ReferencesManager::getInstance()->getPlayerCharacter()->Move("+Y");
+					moveAllEnemies();
+				}
 				break;
 
 			case SDLK_w:
-				player.Move("-X");
-				enemy.Move();
+				if (playerTurn)
+				{
+					playerTurn = false;
+					ReferencesManager::getInstance()->getPlayerCharacter()->Move("-X");
+					moveAllEnemies();
+				}
 				break;
 
 			case SDLK_s:
-				player.Move("+X");
-				enemy.Move();
+				if (playerTurn)
+				{
+					playerTurn = false;
+					ReferencesManager::getInstance()->getPlayerCharacter()->Move("+X");
+					moveAllEnemies();
+				}
 				break;
 			default:break;
 			}
@@ -141,6 +250,8 @@ void updateInput()
 
 			if (game.event.button.button == SDL_BUTTON_LEFT)
 			{
+				//enemies.erase(std::remove(enemies.begin(), enemies.end(), enemies[0]), enemies.end());
+
 				//int x, y;
 				////Uint32 buttons;
 				//SDL_GetMouseState(&x, &y);
@@ -185,6 +296,8 @@ void updateInput()
 
 
 
+
+
 int main(int argc, char* argv[])
 {
 	char title[10] = "GRID";
@@ -195,6 +308,8 @@ int main(int argc, char* argv[])
 		update();
 		updateInput();
 		draw();
+		gloabalTimer->Tick();
+	
 	}
 
 	closeDownSDL();
